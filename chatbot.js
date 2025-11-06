@@ -20,23 +20,23 @@ if (fs.existsSync(SESSION_FILE_PATH)) {
 
 // ✅ Configuração do cliente com sessão persistente / Configuración del cliente con sesión persistente
 const client = new Client({
-    authStrategy: new LocalAuth({
-        dataPath: './.wwebjs_auth',
-        clientId: 'bot-whatsapp'
-    }),
+    authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        executablePath: puppeteer.executablePath(),
+        executablePath: require('puppeteer').executablePath(),
         args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--single-process'
-    ]
-}
-
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+        ]
+    }
 });
+
 
 // 📲 Geração do código QR / Generación del código QR
 client.on('qr', qr => {

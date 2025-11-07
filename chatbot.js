@@ -3,7 +3,8 @@
 // 📱 Lector de código QR / Leitor de QR Code
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
-const puppeteer = require('puppeteer');
+const chromium = require('@sparticuz/chromium');
+const puppeteer = require('puppeteer-core');
 const { Client, Buttons, List, MessageMedia, LocalAuth } = require('whatsapp-web.js');
 
 // 🚀 Log inicial para depuración / Log inicial para depuração
@@ -23,17 +24,10 @@ const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
         headless: true,
-        executablePath: require('puppeteer').executablePath(),
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--single-process',
-            '--disable-gpu'
-        ]
+        executablePath: chromium.executablePath(),
+        args: chromium.args,
+        ignoreHTTPSErrors: true,
+        defaultViewport: chromium.defaultViewport,
     }
 });
 

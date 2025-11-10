@@ -34,11 +34,24 @@ const usuariosConMenu = new Set();
         puppeteer: {
             headless: true,
             executablePath,
-            args: chromium.args,
+            args: [
+                ...chromium.args,
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--single-process',
+                '--no-zygote',
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-extensions',
+                '--disable-features=site-per-process',
+                '--disable-breakpad'
+            ],
             ignoreHTTPSErrors: true,
             defaultViewport: chromium.defaultViewport,
         }
     });
+
 
     // 📲 Geração do código QR / Generación del código QR
     client.on('qr', qr => {

@@ -5,6 +5,7 @@ const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const chromium = require('@sparticuz/chromium');
 const puppeteer = require('puppeteer-core');
+const express = require('express');
 const { Client, Buttons, List, MessageMedia, LocalAuth } = require('whatsapp-web.js');
 
 // 🚀 Log inicial para depuración / Log inicial para depuração
@@ -25,28 +26,36 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 // 🧠 Memória simples: guarda números que já receberam o menu / Memoria simple: guarda números que ya recibieron el menú
 const usuariosConMenu = new Set();
 
-// 🚀 Tudo dentro do bloco async para garantir que chromium funciona no Render
+// 🚀 Tudo dentro do bloco async para garantir que chromium funciona no Render / e para permitir await em executablePath
 (async () => {
+    // obtém o caminho do chromium preparado pelo @sparticuz/chromium
     const executablePath = await chromium.executablePath();
+
+    // Ajusta flags dependendo do SO (no Windows removemos flags que às vezes dão erro)
+    const baseArgs = [
+        ...chromium.args,
+        '--disable-dev-shm-usage',
+        '--single-process',
+        '--no-zygote',
+        '--disable-gpu',
+        '--disable-software-rasterizer',
+        '--disable-extensions',
+        '--disable-features=site-per-process',
+        '--disable-breakpad'
+    ];
+
+    // Em Linux/containers geralmente precisamos do no-sandbox; em Windows pode causar "bad option"
+    if (process.platform !== 'win32') {
+        // flags seguras para Linux/containers (Render, PM2 em Linux, etc)
+        baseArgs.push('--no-sandbox', '--disable-setuid-sandbox');
+    }
 
     const client = new Client({
         authStrategy: new LocalAuth(),
         puppeteer: {
             headless: true,
             executablePath,
-            args: [
-                ...chromium.args,
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--single-process',
-                '--no-zygote',
-                '--disable-gpu',
-                '--disable-software-rasterizer',
-                '--disable-extensions',
-                '--disable-features=site-per-process',
-                '--disable-breakpad'
-            ],
+            args: baseArgs,
             ignoreHTTPSErrors: true,
             defaultViewport: chromium.defaultViewport,
         }
@@ -62,7 +71,11 @@ const usuariosConMenu = new Set();
     // 💾 Salvar sessão ao conectar / Guardar sesión al conectar
     client.on('authenticated', session => {
         console.log('🔐 Sesión autenticada / 🔐 Sessão autenticada');
-        fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(session));
+        try {
+            fs.writeFileSync(SESSION_FILE_PATH, JSON.stringify(session));
+        } catch (e) {
+            console.error('❌ Erro ao salvar session.json:', e);
+        }
     });
 
     // ✅ Confirmação da conexão / Confirmación de conexión
@@ -124,64 +137,80 @@ const usuariosConMenu = new Set();
 
     // 💬 Evento principal de mensagens / Evento principal de mensajes
     client.on('message', async msg => {
-        console.log(`📩 Mensagem recebida de ${msg.from}: ${msg.body}`);
+        // evita crashes se msg estiver undefined
+        try {
+            console.log(`📩 Mensagem recebida de ${msg.from}: ${msg.body}`);
 
-        const body = msg.body.toLowerCase().trim();
-        const from = msg.from;
+            const body = (msg.body || '').toLowerCase().trim();
+            const from = msg.from || '';
 
-        // 🚫 Ignorar mensagens de grupos / Ignorar mensajes de grupos
-        if (!from.endsWith('@c.us')) return;
+            // 🚫 Ignorar mensagens de grupos / Ignorar mensajes de grupos
+            if (!from.endsWith('@c.us')) return;
 
-        // --- 1️⃣ DETEÇÃO DE SAUDAÇÕES / DETECCIÓN DE SALUDOS ---
-        if (
-            body.match(/\b(buen|buenos|menu|menú|días|dias|tardes|quiero|puedo|tengo|noches|consulta|horario|horário|hola|olá)\b/i) &&
-            !/^[0-9]+$/.test(body) &&
-            !usuariosConMenu.has(from)
-        ) {
-            console.log(`🤖 Enviando menu para ${from}`);
-            await enviarMenu(msg);
-            return;
-        }
+            // --- 1️⃣ DETEÇÃO DE SAUDAÇÕES / DETECCIÓN DE SALUDOS ---
+            if (
+                body.match(/\b(buen|buenos|menu|menú|días|dias|tardes|quiero|puedo|tengo|noches|consulta|horario|horário|hola|olá)\b/i) &&
+                !/^[0-9]+$/.test(body) &&
+                !usuariosConMenu.has(from)
+            ) {
+                console.log(`🤖 Enviando menu para ${from}`);
+                await enviarMenu(msg);
+                return;
+            }
 
-        // --- 2️⃣ OPÇÃO VOLTAR ATRÁS / OPCIÓN VOLVER ATRÁS ---
-        if (body === '0') {
-            usuariosConMenu.delete(from);
-            await enviarMenu(msg);
-            return;
-        }
+            // --- 2️⃣ OPÇÃO VOLTAR ATRÁS / OPCIÓN VOLVER ATRÁS ---
+            if (body === '0') {
+                usuariosConMenu.delete(from);
+                await enviarMenu(msg);
+                return;
+            }
 
-        // --- 3️⃣ OPÇÕES NUMÉRICAS / OPCIONES NUMÉRICAS ---
-        const respuestas = {
-            '1': '📌 Para poder ayudarle, voy a necesitar:\n- Ficha técnica\n- Foto de la centralita\n- Diagnosis del vehículo con los DTC (errores)\n\n📩 Este es un mensaje enviado automáticamente.',
-            '2': '📌 Por favor, envíe:\n- Ficha técnica\n- Fotos de la llave\n- Fallos que presenta la llave\n\n📩 Este es un mensaje enviado automáticamente.',
-            '3': '📌 Por favor, envíe:\n- Ficha técnica\n- Fotos de la llave\n\n📩 Este es un mensaje enviado automáticamente.',
-            '4': '📌 Por favor, envíe:\n- Ficha técnica\n- Diagnosis del vehículo\n\n📩 Este es un mensaje enviado automáticamente.',
-            '5': '📌 Por favor, envíe:\n- Ficha técnica\n- Diagnosis del vehículo\n\n📩 Este es un mensaje enviado automáticamente.',
-            '6': '📌 Por favor, envíe:\n- Ficha técnica\n- Diagnosis del vehículo\n\n📩 Este es un mensaje enviado automaticamente.',
-            '7': '📌 Por favor, envíe:\n- Ficha técnica\n- Diagnóstico con los DTC del airbag\n- Foto de la centralita\n\n📩 Este es un mensaje enviado automáticamente.',
-            '8': '📌 Por favor, envíe:\n- Ficha técnica\n- Descripción de los errores del cuadro (si es posible, vídeo)\n\n📩 Este es un mensaje enviado automáticamente.',
-            '9': '📌 Por favor, envíe:\n- Su nombre completo\n- Número de orden\n\n📩 Este es un mensaje enviado automáticamente.',
-            '10': '📌 Por favor, describa brevemente el tipo de reparación o problema.\n\n📩 Este es un mensaje enviado automáticamente.'
-        };
+            // --- 3️⃣ OPÇÕES NUMÉRICAS / OPCIONES NUMÉRICAS ---
+            const respuestas = {
+                '1': '📌 Para poder ayudarle, voy a necesitar:\n- Ficha técnica\n- Foto de la centralita\n- Diagnosis del vehículo con los DTC (errores)\n\n📩 Este es un mensaje enviado automáticamente.',
+                '2': '📌 Por favor, envíe:\n- Ficha técnica\n- Fotos de la llave\n- Fallos que presenta la llave\n\n📩 Este es un mensaje enviado automáticamente.',
+                '3': '📌 Por favor, envíe:\n- Ficha técnica\n- Fotos de la llave\n\n📩 Este es un mensaje enviado automáticamente.',
+                '4': '📌 Por favor, envíe:\n- Ficha técnica\n- Diagnosis del vehículo\n\n📩 Este es un mensaje enviado automáticamente.',
+                '5': '📌 Por favor, envíe:\n- Ficha técnica\n- Diagnosis del vehículo\n\n📩 Este es un mensaje enviado automáticamente.',
+                '6': '📌 Por favor, envíe:\n- Ficha técnica\n- Diagnosis del vehículo\n\n📩 Este es un mensaje enviado automaticamente.',
+                '7': '📌 Por favor, envíe:\n- Ficha técnica\n- Diagnóstico con los DTC del airbag\n- Foto de la centralita\n\n📩 Este es un mensaje enviado automáticamente.',
+                '8': '📌 Por favor, envíe:\n- Ficha técnica\n- Descripción de los errores del cuadro (si es posible, vídeo)\n\n📩 Este es un mensaje enviado automáticamente.',
+                '9': '📌 Por favor, envíe:\n- Su nombre completo\n- Número de orden\n\n📩 Este es un mensaje enviado automáticamente.',
+                '10': '📌 Por favor, describa brevemente el tipo de reparación o problema.\n\n📩 Este es un mensaje enviado automáticamente.'
+            };
 
-        if (respuestas[body]) {
-            console.log(`📤 Respondendo com a opção ${body} para ${from}`);
-            await responder(msg, respuestas[body]);
-            return;
-        }
+            if (respuestas[body]) {
+                console.log(`📤 Respondendo com a opção ${body} para ${from}`);
+                await responder(msg, respuestas[body]);
+                return;
+            }
 
-        // --- 4️⃣ REINÍCIO DO MENU / REINICIO DEL MENÚ ---
-        if (body.includes('menu') || body.includes('volver')) {
-            usuariosConMenu.delete(from);
-            await client.sendMessage(from, '🔄 Menú reiniciado. Escriba "hola" o "buenas" para ver las opciones otra vez.');
+            // --- 4️⃣ REINÍCIO DO MENU / REINICIO DEL MENÚ ---
+            if (body.includes('menu') || body.includes('volver')) {
+                usuariosConMenu.delete(from);
+                await client.sendMessage(from, '🔄 Menú reiniciado. Escriba "hola" o "buenas" para ver las opciones otra vez.');
+            }
+        } catch (err) {
+            console.error('Erro no handler de mensagem:', err);
         }
     });
 
-    // 🚀 Inicializa o cliente (importante para PM2) / Inicializa el cliente (importante para PM2)
-    client.initialize();
+    // 🚀 Inicializa o cliente (importante para PM2 / Render)
+    try {
+        await client.initialize();
+    } catch (err) {
+        console.error('Falha ao inicializar client:', err);
+    }
 
     // 💾 Mantém o processo vivo no PM2 / Mantiene el proceso vivo en PM2
     process.on('uncaughtException', (err) => {
         console.error('⚠️ Exceção não tratada / ⚠️ Excepción no controlada:', err);
     });
+
+    // 🩵 Mantém o bot ativo no Render abrindo um pequeno servidor HTTP
+    // (não altera nada do bot, apenas evita que plataformas como Render encerrem o processo)
+    const app = express();
+    const PORT = process.env.PORT || 3000;
+    app.get('/', (req, res) => res.send('🤖 Bot WhatsApp da Aetronics está activo e rodando.'));
+    app.listen(PORT, () => console.log(`🌐 Health server listening on port ${PORT}`));
 })();

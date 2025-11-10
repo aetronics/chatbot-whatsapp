@@ -1,19 +1,19 @@
 {
-  "name": "whatsapp-bot-aetronics",
+  "name": "chatbot-whatsapp",
   "version": "1.0.0",
-  "description": "Bot de WhatsApp para Aetronics rodando no Render",
+  "description": "🤖 Bot WhatsApp da Aetronics rodando no Render",
   "main": "chatbot.js",
   "scripts": {
     "start": "node chatbot.js"
   },
-  "dependencies": {
-  "@sparticuz/chromium": "^133.0.0",
-  "puppeteer-core": "^20.7.2",
-  "express": "^4.18.2",
-  "qrcode-terminal": "^0.12.0",
-  "whatsapp-web.js": "^1.21.1"
-},
   "engines": {
-    "node": "20.x"
+    "node": ">=20.x"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "^133.0.0",
+    "express": "^4.18.2",
+    "puppeteer-core": "^20.7.2",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.25.0"
   }
 }

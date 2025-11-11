@@ -17,6 +17,12 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 // 🧠 Memória simples para menu
 const usuariosConMenu = new Set();
 
+// 🌐 Servidor Express para Render (mantém container ativo)
+const app = express();
+const PORT = process.env.PORT || 10000;
+app.get('/', (req, res) => res.send('🤖 Bot WhatsApp da Aetronics está activo e rodando.'));
+app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on port ${PORT}`));
+
 (async () => {
   try {
     // 🧭 Caminho executável do Chromium (Render usa build headless)
@@ -174,12 +180,6 @@ const usuariosConMenu = new Set();
 
     // 🧠 Inicializa o cliente WhatsApp
     await client.initialize();
-
-    // 🌐 Mantém o processo ativo no Render
-    const app = express();
-    const PORT = process.env.PORT || 10000;
-    app.get('/', (req, res) => res.send('🤖 Bot WhatsApp da Aetronics está activo e rodando.'));
-    app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on port ${PORT}`));
 
   } catch (err) {
     console.error('💥 Erro crítico na inicialização do bot:', err);

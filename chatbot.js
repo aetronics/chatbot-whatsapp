@@ -2,11 +2,10 @@
 
 // 📱 Lector de código QR / Leitor de QR Code
 const qrcode = require('qrcode-terminal');
-const fs = require('fs');
 const path = require('path');
 const chromium = require('@sparticuz/chromium');
 const express = require('express');
-const { Client, Buttons, List, MessageMedia, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');
 
 // 🚀 Log inicial para depuração
 console.log("🚀 Bot iniciado, aguardando conexão com WhatsApp...");
@@ -17,7 +16,7 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 // 🧠 Memória simples para menu
 const usuariosConMenu = new Set();
 
-// 🌐 Servidor Express para Render (mantém container ativo)
+// 🌐 Servidor Express para Render
 const app = express();
 const PORT = process.env.PORT || 10000;
 app.get('/', (req, res) => res.send('🤖 Bot WhatsApp da Aetronics está activo e rodando.'));
@@ -25,10 +24,9 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on p
 
 (async () => {
   try {
-    // 🧭 Caminho executável do Chromium (Render usa build headless)
-    const executablePath = await chromium.executablePath() || '/usr/bin/chromium-browser';
+    const executablePath = await chromium.executablePath();
 
-    // ⚙️ Configuração de flags (necessárias para ambiente Render)
+    // ⚙️ Configuração Chromium otimizada para Render + Node 25
     const baseArgs = [
       ...chromium.args,
       '--no-sandbox',
@@ -39,52 +37,35 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on p
       '--disable-gpu',
       '--disable-software-rasterizer',
       '--disable-extensions',
-      '--disable-features=site-per-process',
+      '--disable-features=site-per-process,TranslateUI',
       '--disable-breakpad',
-      '--ignore-certificate-errors',
       '--window-size=1920,1080'
     ];
 
-    // ⚙️ Cliente WhatsApp com sessão persistente
     const client = new Client({
       authStrategy: new LocalAuth({
-        dataPath: path.join(__dirname, '.wwebjs_auth') // Persistente entre reinícios
+        dataPath: path.join(__dirname, '.wwebjs_auth')
       }),
       puppeteer: {
         headless: true,
         executablePath,
         args: baseArgs,
         ignoreHTTPSErrors: true,
-        defaultViewport: chromium.defaultViewport,
+        defaultViewport: chromium.defaultViewport
       }
     });
 
-    // 📲 QR Code
+    // 📲 Exibe QR code no terminal
     client.on('qr', qr => {
-      console.log('📱 Escanee este QR / Escaneie este QR com o WhatsApp');
+      console.log('📱 Escanee este QR / Escaneie este QR com o WhatsApp:');
       qrcode.generate(qr, { small: true });
     });
 
-    // 💾 Sessão autenticada
-    client.on('authenticated', () => {
-      console.log('🔐 Sessão autenticada / Sesión autenticada');
-    });
+    client.on('authenticated', () => console.log('🔐 Sessão autenticada / Sesión autenticada'));
+    client.on('ready', () => console.log('✅ Tudo certo! WhatsApp conectado.'));
+    client.on('disconnected', reason => console.log('⚠️ Cliente desconectado:', reason));
+    client.on('auth_failure', msg => console.error('❌ Falha na autenticação:', msg));
 
-    // ✅ Cliente pronto
-    client.on('ready', () => {
-      console.log('✅ Tudo certo! WhatsApp conectado.');
-    });
-
-    // ⚠️ Cliente desconectado
-    client.on('disconnected', reason => {
-      console.log('⚠️ Cliente desconectado:', reason);
-    });
-
-    client.on('auth_failure', msg => {
-      console.error('❌ Falha na autenticação:', msg);
-    });
-
-    // 📋 Funções auxiliares
     async function enviarMenu(msg) {
       const chat = await msg.getChat();
       await delay(1000);
@@ -125,7 +106,6 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on p
       await client.sendMessage(msg.from, texto);
     }
 
-    // 🎯 Evento principal de mensagens
     client.on('message', async msg => {
       try {
         console.log(`📩 Mensagem recebida de ${msg.from}: ${msg.body}`);
@@ -178,7 +158,6 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on p
       }
     });
 
-    // 🧠 Inicializa o cliente WhatsApp
     await client.initialize();
 
   } catch (err) {

@@ -2,12 +2,13 @@
 
 // 📱 Lector de código QR / Leitor de QR Code
 const qrcode = require('qrcode-terminal');
+const fs = require('fs');
 const path = require('path');
 const chromium = require('@sparticuz/chromium');
 const express = require('express');
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, Buttons, List, MessageMedia, LocalAuth } = require('whatsapp-web.js');
 
-// 🚀 Log inicial para depuração
+// 🚀 Log inicial
 console.log("🚀 Bot iniciado, aguardando conexão com WhatsApp...");
 
 // ⏱️ Função de atraso
@@ -16,32 +17,32 @@ const delay = ms => new Promise(res => setTimeout(res, ms));
 // 🧠 Memória simples para menu
 const usuariosConMenu = new Set();
 
-// 🌐 Servidor Express para Render
-const app = express();
-const PORT = process.env.PORT || 10000;
-app.get('/', (req, res) => res.send('🤖 Bot WhatsApp da Aetronics está activo e rodando.'));
-app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on port ${PORT}`));
+// 🔄 Variável para guardar último QR
+let ultimoQR = null;
 
 (async () => {
   try {
-    const executablePath = await chromium.executablePath();
+    // Caminho executável do Chromium (Render usa versão headless)
+    const executablePath = await chromium.executablePath() || '/usr/bin/chromium-browser';
 
-    // ⚙️ Configuração Chromium otimizada para Render + Node 25
+    // Configuração de flags (essenciais no Render)
     const baseArgs = [
       ...chromium.args,
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
+      '--disable-gpu',
       '--single-process',
       '--no-zygote',
-      '--disable-gpu',
       '--disable-software-rasterizer',
       '--disable-extensions',
-      '--disable-features=site-per-process,TranslateUI',
+      '--disable-features=site-per-process',
       '--disable-breakpad',
-      '--window-size=1920,1080'
+      '--ignore-certificate-errors',
+      '--window-size=1280,720'
     ];
 
+    // Cliente WhatsApp com sessão persistente
     const client = new Client({
       authStrategy: new LocalAuth({
         dataPath: path.join(__dirname, '.wwebjs_auth')
@@ -51,21 +52,39 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on p
         executablePath,
         args: baseArgs,
         ignoreHTTPSErrors: true,
-        defaultViewport: chromium.defaultViewport
+        defaultViewport: chromium.defaultViewport,
       }
     });
 
-    // 📲 Exibe QR code no terminal
+    // 📲 QR Code
     client.on('qr', qr => {
-      console.log('📱 Escanee este QR / Escaneie este QR com o WhatsApp:');
-      qrcode.generate(qr, { small: false });
+      ultimoQR = qr;
+      console.log('📱 Escanee este QR / Escaneie este QR com o WhatsApp');
+      // Mostra QR pequeno (só para log)
+      qrcode.generate(qr, { small: true });
+      console.log('👉 Também pode abrir /qr no navegador para ver o código nitidamente');
     });
 
-    client.on('authenticated', () => console.log('🔐 Sessão autenticada / Sesión autenticada'));
-    client.on('ready', () => console.log('✅ Tudo certo! WhatsApp conectado.'));
-    client.on('disconnected', reason => console.log('⚠️ Cliente desconectado:', reason));
-    client.on('auth_failure', msg => console.error('❌ Falha na autenticação:', msg));
+    // 💾 Sessão autenticada
+    client.on('authenticated', () => {
+      console.log('🔐 Sessão autenticada / Sesión autenticada');
+    });
 
+    // ✅ Cliente pronto
+    client.on('ready', () => {
+      console.log('✅ Tudo certo! WhatsApp conectado.');
+    });
+
+    // ⚠️ Cliente desconectado
+    client.on('disconnected', reason => {
+      console.log('⚠️ Cliente desconectado:', reason);
+    });
+
+    client.on('auth_failure', msg => {
+      console.error('❌ Falha na autenticação:', msg);
+    });
+
+    // 📋 Funções auxiliares
     async function enviarMenu(msg) {
       const chat = await msg.getChat();
       await delay(1000);
@@ -106,6 +125,7 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on p
       await client.sendMessage(msg.from, texto);
     }
 
+    // 🎯 Evento principal de mensagens
     client.on('message', async msg => {
       try {
         console.log(`📩 Mensagem recebida de ${msg.from}: ${msg.body}`);
@@ -158,7 +178,23 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on p
       }
     });
 
+    // 🧠 Inicializa o cliente WhatsApp
     await client.initialize();
+
+    // 🌐 Servidor Express para manter Render ativo e exibir QR
+    const app = express();
+    const PORT = process.env.PORT || 10000;
+
+    app.get('/', (req, res) => res.send('🤖 Bot WhatsApp da Aetronics está activo e rodando.'));
+    app.get('/qr', (req, res) => {
+      if (!ultimoQR) return res.send('Nenhum QR gerado ainda.');
+      res.send(`<html><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;">
+      <h2>📱 Escaneie o QR com o WhatsApp</h2>
+      <img src="https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(ultimoQR)}&size=250x250" />
+      </body></html>`);
+    });
+
+    app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on port ${PORT}`));
 
   } catch (err) {
     console.error('💥 Erro crítico na inicialização do bot:', err);

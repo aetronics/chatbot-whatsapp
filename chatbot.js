@@ -58,7 +58,7 @@ app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on p
     // 📲 Exibe QR code no terminal
     client.on('qr', qr => {
       console.log('📱 Escanee este QR / Escaneie este QR com o WhatsApp:');
-      qrcode.generate(qr, { small: true });
+      qrcode.generate(qr, { small: false });
     });
 
     client.on('authenticated', () => console.log('🔐 Sessão autenticada / Sesión autenticada'));

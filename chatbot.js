@@ -1,6 +1,5 @@
 // chatbot.js
 
-// 📱 Lector de código QR / Leitor de QR Code
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
@@ -8,24 +7,21 @@ const chromium = require('@sparticuz/chromium');
 const express = require('express');
 const { Client, Buttons, List, MessageMedia, LocalAuth } = require('whatsapp-web.js');
 
-// 🚀 Log inicial
 console.log("🚀 Bot iniciado, aguardando conexão com WhatsApp...");
 
-// ⏱️ Função de atraso
 const delay = ms => new Promise(res => setTimeout(res, ms));
-
-// 🧠 Memória simples para menu
 const usuariosConMenu = new Set();
-
-// 🔄 Variável para guardar último QR
 let ultimoQR = null;
 
 (async () => {
   try {
-    // Caminho executável do Chromium (Render usa versão headless)
-    const executablePath = await chromium.executablePath() || '/usr/bin/chromium-browser';
+    // 🔧 Caminho executável (Render e Windows compatível)
+    const executablePath =
+      process.platform === 'win32'
+        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+        : (await chromium.executablePath()) || '/usr/bin/google-chrome';
 
-    // Configuração de flags (essenciais no Render)
+    // ⚙️ Flags do Chromium
     const baseArgs = [
       ...chromium.args,
       '--no-sandbox',
@@ -39,10 +35,12 @@ let ultimoQR = null;
       '--disable-features=site-per-process',
       '--disable-breakpad',
       '--ignore-certificate-errors',
+      '--disable-infobars',
+      '--hide-scrollbars',
       '--window-size=1280,720'
     ];
 
-    // Cliente WhatsApp com sessão persistente
+    // 🤖 Cliente WhatsApp
     const client = new Client({
       authStrategy: new LocalAuth({
         dataPath: path.join(__dirname, '.wwebjs_auth')
@@ -51,40 +49,24 @@ let ultimoQR = null;
         headless: true,
         executablePath,
         args: baseArgs,
-        ignoreHTTPSErrors: true,
-        defaultViewport: chromium.defaultViewport,
+        ignoreHTTPSErrors: true
       }
     });
 
     // 📲 QR Code
     client.on('qr', qr => {
       ultimoQR = qr;
+      console.clear();
       console.log('📱 Escanee este QR / Escaneie este QR com o WhatsApp');
-      // Mostra QR pequeno (só para log)
       qrcode.generate(qr, { small: true });
       console.log('👉 Também pode abrir /qr no navegador para ver o código nitidamente');
     });
 
-    // 💾 Sessão autenticada
-    client.on('authenticated', () => {
-      console.log('🔐 Sessão autenticada / Sesión autenticada');
-    });
+    client.on('authenticated', () => console.log('🔐 Sessão autenticada / Sesión autenticada'));
+    client.on('ready', () => console.log('✅ Tudo certo! WhatsApp conectado.'));
+    client.on('disconnected', reason => console.log('⚠️ Cliente desconectado:', reason));
+    client.on('auth_failure', msg => console.error('❌ Falha na autenticação:', msg));
 
-    // ✅ Cliente pronto
-    client.on('ready', () => {
-      console.log('✅ Tudo certo! WhatsApp conectado.');
-    });
-
-    // ⚠️ Cliente desconectado
-    client.on('disconnected', reason => {
-      console.log('⚠️ Cliente desconectado:', reason);
-    });
-
-    client.on('auth_failure', msg => {
-      console.error('❌ Falha na autenticação:', msg);
-    });
-
-    // 📋 Funções auxiliares
     async function enviarMenu(msg) {
       const chat = await msg.getChat();
       await delay(1000);
@@ -125,7 +107,6 @@ let ultimoQR = null;
       await client.sendMessage(msg.from, texto);
     }
 
-    // 🎯 Evento principal de mensagens
     client.on('message', async msg => {
       try {
         console.log(`📩 Mensagem recebida de ${msg.from}: ${msg.body}`);
@@ -178,10 +159,10 @@ let ultimoQR = null;
       }
     });
 
-    // 🧠 Inicializa o cliente WhatsApp
+    // 🔄 Inicializa o WhatsApp
     await client.initialize();
 
-    // 🌐 Servidor Express para manter Render ativo e exibir QR
+    // 🌐 Servidor Express
     const app = express();
     const PORT = process.env.PORT || 10000;
 
@@ -194,6 +175,7 @@ let ultimoQR = null;
       </body></html>`);
     });
 
+    // 🔊 Escutar em 0.0.0.0 (necessário no Render)
     app.listen(PORT, '0.0.0.0', () => console.log(`🌐 Health server listening on port ${PORT}`));
 
   } catch (err) {

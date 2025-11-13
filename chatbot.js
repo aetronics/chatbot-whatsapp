@@ -177,9 +177,9 @@ let ultimoQR = null;
     });
 
     // 🔥 AQUI ESTÁ A LINHA CRÍTICA PARA FUNCIONAR NO RENDER
-    app.listen(PORT, '0.0.0.0', () =>
-      console.log(`🌐 Servidor ativo na porta ${PORT}`)
-    );
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🌐 Servidor ativo na porta ${PORT}`);
+    });
 
   } catch (err) {
     console.error('💥 Erro crítico na inicialização do bot:', err);

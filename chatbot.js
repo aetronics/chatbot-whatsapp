@@ -54,7 +54,7 @@ let ultimoQR = null;
         executablePath,
         args: baseArgs,
         ignoreHTTPSErrors: true,
-        defaultViewport: chromium.defaultViewport,
+        defaultViewport: chromium.defaultViewport
       }
     });
 
@@ -176,7 +176,7 @@ let ultimoQR = null;
       </body></html>`);
     });
 
-    // 🔥 AQUI ESTÁ A LINHA CRÍTICA PARA FUNCIONAR NO RENDER
+    // ⚠️ Linha crítica — Render só detecta se estiver em 0.0.0.0
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🌐 Servidor ativo na porta ${PORT}`);
     });
